@@ -19,7 +19,7 @@ int LID_Count = 0;
 unsigned long lidLowStartTime = 0;
 bool lidWasLow = false;
 String receivedData = "";
-int Rec_TEC_DutyCycle, Rec_HSFAN_DutyCycle, Rec_CSFAN_DutyCycle;
+float Rec_TEC_DutyCycle, Rec_HSFAN_DutyCycle, Rec_CSFAN_DutyCycle;
 const gpio_num_t RX_PIN = GPIO_NUM_18;
 const gpio_num_t TX_PIN = GPIO_NUM_17;
 int HS_count;
@@ -191,8 +191,8 @@ void Current_values() {
 }
 
 void processReceivedData() {
-  Serial.print("Received Dutycycle Values: ");
-  Serial.println(receivedData);
+  // Serial.print("Received Dutycycle Values: ");
+  // Serial.println(receivedData);
 
   // Convert the receivedData to a mutable character array
   char receivedCharArray[receivedData.length() + 1];
@@ -202,7 +202,7 @@ void processReceivedData() {
   int index = 0;
   char *token = strtok(receivedCharArray, ",");
   while (token != NULL && index < 3) {
-    int value = atoi(token);
+    float value = atof(token);
     if (index == 0) {
       Rec_TEC_DutyCycle = value;
     } else if (index == 1) {
@@ -222,7 +222,7 @@ void processReceivedData() {
   Serial.println(Rec_HSFAN_DutyCycle);
   Serial.print("Rec_CSFAN_DutyCycle: ");
   Serial.println(Rec_CSFAN_DutyCycle);
-
+  HS_dutyCycle=Rec_TEC_DutyCycle;
   // Clear the receivedData for the next reading
   receivedData = "";
 }
@@ -248,6 +248,7 @@ void loop() {
           SerialPort.print(batteryVoltage);
           SerialPort.print(",");
           Current_values();
+          HS_Fan();
 
           while (SerialPort.available()) {
             char incomingChar = SerialPort.read();
