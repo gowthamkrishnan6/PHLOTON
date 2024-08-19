@@ -1,18 +1,19 @@
-const gpio_num_t LED_PIN = GPIO_NUM_47;     // Pin no 47
-const gpio_num_t BUZZER_PIN = GPIO_NUM_42;  // Pin no 42
-const gpio_num_t BATT_VSNS = GPIO_NUM_4;    // Pin no 4
-const gpio_num_t HS_FAN = GPIO_NUM_7;       // Pin no 7
-const gpio_num_t CS_FAN = GPIO_NUM_21;      // Pin no 21
-const gpio_num_t LID = GPIO_NUM_10;         // Pin no 9
-const gpio_num_t HSFAN_ISNS = GPIO_NUM_15;  // Pin no 15
-const gpio_num_t CSFAN_ISNS = GPIO_NUM_14;  // Pin no 14
-const gpio_num_t BATT_ISNS = GPIO_NUM_5;    // Pin no 5
-const int HS_FAN_Channel = 1;               // Channel 1
-const int resolution = 12;                  // Maximum resolution supported by ESP32 LEDC is 12 bits
-int HS_dutyCycle = 1000;                    // Hot fan Duty cycle
-const int freq = 5000;                      // 5kHz frequency
-const int CS_FAN_Channel = 0;               // Channel 0
-int CS_dutyCycle = 1000;                    // Cold fan Duty cycle
+const gpio_num_t LED_PIN = GPIO_NUM_47;       // Pin no 47
+const gpio_num_t BUZZER_PIN = GPIO_NUM_42;    // Pin no 42
+const gpio_num_t BATT_VSNS = GPIO_NUM_4;      // Pin no 4
+const gpio_num_t HS_FAN = GPIO_NUM_7;         // Pin no 7
+const gpio_num_t CS_FAN = GPIO_NUM_21;        // Pin no 21
+const gpio_num_t LID = GPIO_NUM_10;           // Pin no 9
+const gpio_num_t HSFAN_ISNS = GPIO_NUM_15;    // Pin no 15
+const gpio_num_t CSFAN_ISNS = GPIO_NUM_6;     // Pin no 14
+const gpio_num_t BATT_ISNS = GPIO_NUM_5;      // Pin no 5
+const gpio_num_t TEC_COLD_CTRL = GPIO_NUM_1;  // Pin no 1
+const int HS_FAN_Channel = 1;                 // Channel 1
+const int resolution = 12;                    // Maximum resolution supported by ESP32 LEDC is 12 bits
+int HS_dutyCycle = 1000;                      // Hot fan Duty cycle
+const int freq = 5000;                        // 5kHz frequency
+const int CS_FAN_Channel = 0;                 // Channel 0
+int CS_dutyCycle = 1000;                      // Cold fan Duty cycle
 const float R1 = 10000;
 const float R2 = 1000;
 int LID_Count = 0;
@@ -24,6 +25,11 @@ const gpio_num_t RX_PIN = GPIO_NUM_18;
 const gpio_num_t TX_PIN = GPIO_NUM_17;
 int HS_count;
 int CS_count;
+
+// Define resistor values
+const float R_sense = 0.01;  // Sense resistor value in ohms
+const float R54 = 49.9e3;    // Resistor R54 value
+const float R57 = 4.99e3;    // Resistor R57 value
 
 HardwareSerial SerialPort(2);
 
@@ -100,7 +106,7 @@ float readBatteryVoltage() {
 //   // Convert ADC value to voltage (assuming Vref=3.3V)
 //   float BATT_VSNS_voltage = BATT_VSNS_adcValue * (3.3 / 4095.0);
 //   float voltage = BATT_VSNS_voltage / (R2 / (R1 + R2));
-  
+
 //   return voltage ; // Adjusting voltage based on calibration
 // }
 
@@ -153,41 +159,48 @@ bool CS_Fan() {
 }
 
 void Current_values() {
-  const float Resistor = 0.005;  // Shunt resistor value
-  const float Gain = 100.0;      // Adjust this value based on your gain calculation
 
   // BATT_ISNS current calculation
   int BATT_ISNS_adcValue = analogRead(BATT_ISNS);
-  float BATT_ISNS_voltage = BATT_ISNS_adcValue * (3.3 / 4095.0);
-  float BATT_ISNS_VOLTAGE = BATT_ISNS_voltage / Gain;
-  float BATT_ISNS_CURRENT = BATT_ISNS_VOLTAGE / Resistor;
+  // Convert to voltage (assuming 3.3V reference for 10-bit ADC)
+  float V_out = BATT_ISNS_adcValue * (3.3 / 4095.0);
+  // Calculate the gain of the differential amplifier
+  float gain = R57 / R54;
+  // Calculate the current in amps
+  float BATT_ISNS_CURRENT = V_out / (gain * R_sense);
   Serial.print("BATT_ISNS_CURRENT : ");
-  Serial.print(BATT_ISNS_CURRENT);
+  Serial.print(BATT_ISNS_CURRENT,6);
   Serial.println("A");
   // SerialPort.print(BATT_ISNS_CURRENT);
   // SerialPort.print(",");
 
-  int HSFAN_ISNS_adcValue = analogRead(HSFAN_ISNS);  // Read ADC value
-  // Convert ADC value to voltage (assuming Vref=3.3V)
-  float HSFAN_ISNS_voltage = HSFAN_ISNS_adcValue * (3.3 / 4095.0);
-  float HSFAN_ISNS_VOLTAGE = HSFAN_ISNS_voltage / Gain;
-  float HSFAN_ISNS_CURRENT = HSFAN_ISNS_VOLTAGE / Resistor;
+  float HSFAN_ISNS_adcValue = analogRead(HSFAN_ISNS);  // Read ADC value
+  // Convert to voltage (assuming 3.3V reference for 10-bit ADC)
+  float V_out1 = HSFAN_ISNS_adcValue * (3.3 / 4095.0);
+  // Calculate the gain of the differential amplifier
+  float gain1 = R57 / R54;
+  // Calculate the current in amps
+  float HSFAN_ISNS_CURRENT = V_out1 / (gain1 * R_sense);
   Serial.print("HSFAN_ISNS_CURRENT : ");
-  Serial.print(HSFAN_ISNS_CURRENT);
+  Serial.print(HSFAN_ISNS_CURRENT,6);
   Serial.println("A");
   SerialPort.print(HSFAN_ISNS_CURRENT);
   SerialPort.print(",");
 
-  int CSFAN_ISNS_adcValue = analogRead(CSFAN_ISNS);  // Read ADC value
-  // Convert ADC value to voltage (assuming Vref=3.3V)
-  float CSFAN_ISNS_voltage = CSFAN_ISNS_adcValue * (3.3 / 4095.0);
-  float CSFAN_ISNS_VOLTAGE = CSFAN_ISNS_voltage / Gain;
-  float CSFAN_ISNS_CURRENT = CSFAN_ISNS_VOLTAGE / Resistor;
+  float CSFAN_ISNS_adcValue = analogRead(CSFAN_ISNS);  // Read ADC value
+  // Convert to voltage (assuming 3.3V reference for 10-bit ADC)
+  float V_out2 = CSFAN_ISNS_adcValue * (3.3 / 4095.0);
+  // Calculate the gain of the differential amplifier
+  float gain2 = R57 / R54;
+  // Calculate the current in amps
+  float CSFAN_ISNS_CURRENT = V_out2 / (gain2 * R_sense);
   Serial.print("CSFAN_ISNS_CURRENT : ");
-  Serial.print(CSFAN_ISNS_CURRENT);
+  Serial.print(CSFAN_ISNS_CURRENT,6);
   Serial.println("A");
   SerialPort.print(CSFAN_ISNS_CURRENT);
   SerialPort.print("\n");
+
+
 }
 
 void processReceivedData() {
@@ -222,7 +235,7 @@ void processReceivedData() {
   Serial.println(Rec_HSFAN_DutyCycle);
   Serial.print("Rec_CSFAN_DutyCycle: ");
   Serial.println(Rec_CSFAN_DutyCycle);
-  HS_dutyCycle=Rec_TEC_DutyCycle;
+  HS_dutyCycle = Rec_TEC_DutyCycle;
   // Clear the receivedData for the next reading
   receivedData = "";
 }
@@ -233,57 +246,56 @@ void loop() {
   Serial.println(batteryVoltage);
   Serial.print(soc);
 
-  if (soc >= 10) 
-  {
+  if (soc >= 10) {
     if (HS_Fan()) {
       // if (CS_Fan())
-        while (digitalRead(LID) == HIGH) {
-          lidWasLow = false;
-          batteryVoltage = readBatteryVoltage();
-          soc = calculateSOC(batteryVoltage);
-          Serial.println(soc);
-          // SerialPort.print("SOC : ");
-          SerialPort.print(soc);
-          SerialPort.print(",");
-          SerialPort.print(batteryVoltage);
-          SerialPort.print(",");
-          Current_values();
-          HS_Fan();
+      while (digitalRead(LID) == HIGH) {
+        lidWasLow = false;
+        batteryVoltage = readBatteryVoltage();
+        soc = calculateSOC(batteryVoltage);
+        Serial.println(soc);
+        // SerialPort.print("SOC : ");
+        SerialPort.print(soc);
+        SerialPort.print(",");
+        SerialPort.print(batteryVoltage);
+        SerialPort.print(",");
+        digitalWrite(TEC_COLD_CTRL, HIGH);
+        Current_values();
+        HS_Fan();
 
-          while (SerialPort.available()) {
-            char incomingChar = SerialPort.read();
-            if (incomingChar == '\n') {
-              // End of the string, process the received data
-              processReceivedData();
-            } else {
-              // Append the incoming character to the receivedData
-              receivedData += incomingChar;
-            }
+        while (SerialPort.available()) {
+          char incomingChar = SerialPort.read();
+          if (incomingChar == '\n') {
+            // End of the string, process the received data
+            processReceivedData();
+          } else {
+            // Append the incoming character to the receivedData
+            receivedData += incomingChar;
           }
-          delay(10000);
         }
+        delay(10000);
+      }
 
-        if (digitalRead(LID) == LOW) {
-          if (!lidWasLow) {
-            lidWasLow = true;
-            lidLowStartTime = millis();
-          }
-          if (millis() - lidLowStartTime >= 20000) {
-            Buzzer_LID();
-            delay(3000);  // Wait for 3 seconds before the next beep
-          }
+      if (digitalRead(LID) == LOW) {
+        if (!lidWasLow) {
+          lidWasLow = true;
+          lidLowStartTime = millis();
+        }
+        if (millis() - lidLowStartTime >= 20000) {
+          Buzzer_LID();
+          delay(3000);  // Wait for 3 seconds before the next beep
         }
       }
-    } 
-  else {
-      digitalWrite(LED_PIN, HIGH);
-      delay(1000);
-      digitalWrite(LED_PIN, LOW);
-      delay(100);
-      // HS_dutyCycle=0;
-      // CS_dutyCycle=0;
-      // HS_Fan();
-      // CS_Fan();
-      Serial.println("Connect charger");
     }
+  } else {
+    digitalWrite(LED_PIN, HIGH);
+    delay(1000);
+    digitalWrite(LED_PIN, LOW);
+    delay(100);
+    // HS_dutyCycle=0;
+    // CS_dutyCycle=0;
+    // HS_Fan();
+    // CS_Fan();
+    Serial.println("Connect charger");
+  }
 }

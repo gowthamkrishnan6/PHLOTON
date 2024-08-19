@@ -12,31 +12,33 @@ HardwareSerial SerialPort(2);
 
 const gpio_num_t RX_PIN = GPIO_NUM_18;
 const gpio_num_t TX_PIN = GPIO_NUM_17;
-const gpio_num_t thermistorPin1 = GPIO_NUM_3;
-const gpio_num_t thermistorPin2 = GPIO_NUM_9;
-const gpio_num_t thermistorPin3 = GPIO_NUM_10;
-const gpio_num_t thermistorPin4 = GPIO_NUM_11;
-const gpio_num_t thermistorPin5 = GPIO_NUM_12;
-const gpio_num_t thermistorPin6 = GPIO_NUM_8;
+const gpio_num_t THERMISTOR_PIN_1 = GPIO_NUM_3;
+const gpio_num_t THERMISTOR_PIN_2 = GPIO_NUM_9;
+const gpio_num_t THERMISTOR_PIN_3 = GPIO_NUM_10;
+const gpio_num_t THERMISTOR_PIN_4 = GPIO_NUM_11;
+const gpio_num_t THERMISTOR_PIN_5 = GPIO_NUM_12;
+const gpio_num_t THERMISTOR_PIN_AMB = GPIO_NUM_8;
 const gpio_num_t LED_PIN = GPIO_NUM_21;
-const float BETA = 3950;
-const float R0 = 10000.0;
-int Temperature1, Temperature2, Temperature3, Temperature4, Temperature5, Temperature6;
+const int THERMISTOR_PIN[6] = {THERMISTOR_PIN_AMB, THERMISTOR_PIN_1, THERMISTOR_PIN_2, THERMISTOR_PIN_3, THERMISTOR_PIN_4, THERMISTOR_PIN_5};
+// Constants for the NTC thermistor
+const float vRef = 2.5;          // Reference voltage
+const uint16_t adcMax = 4095;    // Max ADC value (12-bit ADC)
+const float rFixed = 10000.0;    // Fixed resistor value in ohms (10k)
+const float beta = 3950.0;       // Beta parameter of the NTC thermistor
+const float r0 = 10000.0;        // Resistance at reference temperature (10k ohms)
+const float t0 = 285.15;         // Reference temperature in Kelvin (4°C)
+float ntcResistance[6];
+float temperatureCelsius[6];
+
 String receivedData = "";
 float CSFAN_ISNS, HSFAN_ISNS, VBatt_ISNS, SOC;
 float HSFAN_Dutycycle, CSFAN_Dutycycle, TEC_Dutycycle;
 
 File myFile;
 
-
-
-
-
-
-
 float Kp = 200.0;      // Proportional gain (tune based on your system)
 float Ki = 50.0;       // Integral gain (tune based on your system)
-float setpoint = 4.0;  // Desired temperature in Celsius
+float setpoint = 6.0;  // Desired temperature in Celsius
                        // Variables
 float integral = 0.0;
 float previous_error = 0.0;
@@ -46,11 +48,6 @@ float dt = 1.0; // Time step in seconds
 void setup() {
   Serial.begin(115200);
   SerialPort.begin(115200, SERIAL_8N1, RX_PIN, TX_PIN);  // RX on GPIO18, TX on GPIO17
-  // delay(2000);
-  // while (!Serial) {
-  //   // Wait for serial port to connect. Needed for native USB port only
-  //   ;
-  // }
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
   Serial.println("Setup start");
@@ -81,66 +78,48 @@ void setup() {
   }
 }
 
-void Temperature_reading() {
-  Temperature1 = temperature_calculation(thermistorPin1);
-  Temperature2 = temperature_calculation(thermistorPin2);
-  Temperature3 = temperature_calculation(thermistorPin3);
-  Temperature4 = temperature_calculation(thermistorPin4);
-  Temperature5 = temperature_calculation(thermistorPin5);
-  Temperature6 = temperature_calculation(thermistorPin6);
 
-  // Validate all thermistors
-  if (Temperature1 == 0 || Temperature2 == 0 || Temperature3 == 0 || Temperature4 == 0 || Temperature5 == 0 || Temperature6 == 0) {
-    Serial.println("Error: One or more thermistors are not working correctly. Check connections.");
-    return;
-  }
+// Function to calculate NTC resistance from ADC value
+float calculateNTCResistance(uint16_t adcValue, float vRef, uint16_t adcMax, float rFixed) {
+    // Calculate the ADC voltage
+    float vAdc = ((float)adcValue / (float)adcMax) * vRef;
+
+    // Calculate the NTC resistance using the voltage divider equation
+    float rNtc = (rFixed * vAdc) / (vRef - vAdc);
+
+    return rNtc;
 }
 
-int temperature_calculation(int ThermistorPin) {
-  const int numreading = 5;
-  int analogsamples[numreading];
+// Function to convert NTC resistance to temperature using the Beta parameter equation
+float ntcResistanceToTemperature(float resistance, float beta, float r0, float t0) {
+    // Calculate temperature in Kelvin
+    float temperatureKelvin = 1.0 / ((1.0 / t0) + (1.0 / beta) * log(resistance / r0));
 
-  // Take multiple readings for averaging
-  for (int i = 0; i < numreading; ++i) {
-    analogsamples[i] = analogRead(ThermistorPin);
-    delay(10);
-  }
+    // Convert temperature to Celsius
+    float temperatureCelsius = temperatureKelvin - 273.15;
 
-  // Calculate the average of the readings
-  int sum = 0;
-  for (int i = 0; i < numreading; ++i) {
-    sum += analogsamples[i];
-  }
-  int analogValue = sum / numreading;
+    return temperatureCelsius;
+}
 
-  // Check for valid ADC range
-  if (analogValue < 0 || analogValue > 4095) {
-    Serial.println("Error: Invalid ADC reading");
-    return 0;
-  }
+void Temperature_reading() {
+  // Calculate the resistance of the NTC thermistors
+    for (int i = 0; i < 6; i++) {
+        ntcResistance[i] = calculateNTCResistance(analogRead(THERMISTOR_PIN[i]), vRef, adcMax, rFixed);
+    }
 
-  // Convert ADC value to voltage
-  float voltage = analogValue * (2.5 / 4095.0);
+    // Convert the NTC resistance to temperature in Celsius
+    for (int i = 0; i < 6; i++) {
+        temperatureCelsius[i] = ntcResistanceToTemperature(ntcResistance[i], beta, r0, t0);
+    }
 
-  // Calculate the resistance of the thermistor
-  float resistance = (R0 * voltage) / (2.5 - voltage);
-
-  // Check if resistance is within expected range
-  if (resistance < 100.0 || resistance > 1000000.0) {
-    Serial.println("Error: Resistance out of range, possible thermistor disconnection");
-    return 0;
-  }
-
-  // Calculate the temperature using the Steinhart-Hart equation
-  float temperature = (1.0 / ((log(resistance / R0) / BETA) + (1.0 / (25.0 + 273.15)))) - 273.15;
-
-  // Check if temperature is within expected range
-  if (temperature < -40.0 || temperature > 100.0) {
-    Serial.println("Error: Temperature out of range");
-    return 0;
-  }
-
-  return int(temperature);
+    // Print the temperatures to the Serial Monitor
+    for (int i = 0; i < 6; i++) {
+        Serial.print("Temperature[");
+        Serial.print(i);
+        Serial.print("]: ");
+        Serial.print(temperatureCelsius[i]);
+        Serial.println(" °C");
+    }
 }
 void processReceivedData() {
   // Serial.print("Received Dutycycle Values: ");
@@ -193,10 +172,10 @@ void processReceivedData() {
 
 void PI_ALGO() {
 
-
+  if(HSFAN_Dutycycle<4095)
+  {
   // Step 1: Measure the temperature
-  float currentTemperature = Temperature6;  // Implement this function based on your sensor
-
+  float currentTemperature = temperatureCelsius[2];  // Implement this function based on your sensor
   // Step 2: Calculate the error
   float error =currentTemperature - setpoint ;
 
@@ -216,10 +195,7 @@ void PI_ALGO() {
   } else if (HSFAN_Dutycycle < 0.0) {
     HSFAN_Dutycycle = 0.0;
   }
-  SerialPort.println(HSFAN_Dutycycle);
-
-  Serial.print("Current Temp: ");
-Serial.println(Temperature6);
+  
 Serial.print("Error: ");
 Serial.println(error);
 Serial.print("P_out: ");
@@ -228,19 +204,14 @@ Serial.print("I_out: ");
 Serial.println(I_out);
 // Serial.print("PWM Duty Cycle: ");
 // Serial.println(pwmDutyCycle);
-
+  }
+SerialPort.println(HSFAN_Dutycycle);
 }
 
 
 void loop() {
 
   Temperature_reading();
-
-  // If any thermistor has an error, skip the rest of the loop
-  if (Temperature1 == 0 || Temperature2 == 0 || Temperature3 == 0 || Temperature4 == 0 || Temperature5 == 0) {
-    delay(10000);  // Wait for 10 seconds before trying again
-    return;
-  }
   // Open the file for appending
   myFile = SD.open("/temperature1_log.txt", FILE_APPEND);
   if (myFile) {
@@ -265,35 +236,13 @@ void loop() {
         receivedData += incomingChar;
       }
     }
-
-
-
-    myFile.print("Temperature1 :");
-    myFile.println(Temperature1);
-    myFile.print("Temperature2 :");
-    myFile.println(Temperature2);
-    myFile.print("Temperature3 :");
-    myFile.println(Temperature3);
-    myFile.print("Temperature4 :");
-    myFile.println(Temperature4);
-    myFile.print("Temperature5 :");
-    myFile.println(Temperature5);
-    myFile.print("Temperature6 :");
-    myFile.println(Temperature6);
-
-
-    Serial.print("Temperature1: ");
-    Serial.println(Temperature1);
-    Serial.print("Temperature2: ");
-    Serial.println(Temperature2);
-    Serial.print("Temperature3: ");
-    Serial.println(Temperature3);
-    Serial.print("Temperature4: ");
-    Serial.println(Temperature4);
-    Serial.print("Temperature5: ");
-    Serial.println(Temperature5);
-    Serial.print("Temperature6: ");
-    Serial.println(Temperature6);
+    // Print the temperatures to the SD Card
+    for (int i = 0; i < 6; i++) {
+        myFile.print("Temperature_");
+        myFile.print(i);
+        myFile.print(temperatureCelsius[i]);
+        myFile.println(" °C");
+    }
     PI_ALGO();
     Serial.print("HSFAN_Dutycycle");
     Serial.println(HSFAN_Dutycycle);
