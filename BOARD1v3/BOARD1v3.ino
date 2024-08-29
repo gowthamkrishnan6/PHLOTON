@@ -339,7 +339,7 @@ void loop() {
               receivedData += incomingChar;
             }
           }
-          delay(1000);
+          delay(5000);
         }
 
         if (digitalRead(LID) == LOW) {
@@ -366,7 +366,7 @@ void loop() {
       Serial.print("soc: ");
       Serial.println(soc);
       SerialPort.print(soc);
-      SerialPort.print(",");
+      SerialPort.println(",");
       Serial.println("Connect charger");
     }
   }

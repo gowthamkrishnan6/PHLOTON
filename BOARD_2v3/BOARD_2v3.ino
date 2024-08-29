@@ -274,7 +274,7 @@ void PI_ALGO() {
     // Serial.print("PWM Duty Cycle: ");
     // Serial.println(pwmDutyCycle);
   }
-  SerialPort.println(HSFAN_Dutycycle);
+  // SerialPort.println(HSFAN_Dutycycle);
 }
 
 
@@ -375,7 +375,7 @@ void loop() {
 
 
   // Delay before the next reading (e.g., 10 seconds)
-  delay(10000);  // 10 seconds
+  delay(5000);  // 10 seconds
   // Close the file
 }
 
