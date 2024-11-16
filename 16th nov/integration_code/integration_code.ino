@@ -96,12 +96,12 @@ const float Rsense = 1.01;  // Current sense resistor value in ohms (adjust base
 
 // LED pattern to display (5 LEDs, MSB unused)
 byte ledPattern[] = {
-  0b00000000  // All OFF
+  0b00000000,  // All OFF
   0b00000001, // LED1 ON
   0b00000010, // LED2 ON
   0b00000100, // LED3 ON
   0b00001000, // LED4 ON
-  0b00010000, // LED5 ON
+  0b00010000 // LED5 ON
   
 };
 
@@ -572,25 +572,25 @@ void loop() {
               Serial.println(soc);
               myFile.print(soc);
               myFile.print(",");
-              myFile.print(Batt_voltage);
+              // myFile.print(Batt_voltage);
+              // myFile.print(",");
+              // myFile.print(VBatt_ISNS);
+              // myFile.print(",");
+              // myFile.print(HSFAN_ISNS);
+              // myFile.print(",");
+              // myFile.print(CSFAN_ISNS);
+              // myFile.print(",");
+              myFile.print(PCB_TEMP);
               myFile.print(",");
-              myFile.print(VBatt_ISNS);
+              myFile.print(FLASKTOP_TEMP);
               myFile.print(",");
-              myFile.print(HSFAN_ISNS);
+              myFile.print(HEATSINK_TEMP);
               myFile.print(",");
-              myFile.print(CSFAN_ISNS);
+              myFile.print(COLDSINK_TEMP);
               myFile.print(",");
-              myFile.print(PCB Temperature);
+              myFile.print(FLASKBOTTOM_TEMP);
               myFile.print(",");
-              myFile.print(Flask top Temperature);
-              myFile.print(",");
-              myFile.print(Heat sink Temperature);
-              myFile.print(",");
-              myFile.print(Cold sink Temperature);
-              myFile.print(",");
-              myFile.print(Flask down Temperature);
-              myFile.print(",");
-              myFile.println(Flask average Temperature);
+              myFile.println(Flask_avg_temp);
               sendToShiftRegister(ledPattern[fault]);
 
 
